@@ -48,11 +48,6 @@ function Invoke-RegistryCommand {
         $fullCommand = "{0} `{1}` /v `{2}` /t {3} /d `{4}` /f" -f $Command, $Path, $Name, $Type, $Data
     }
 	
-	#$fullCommand = "Reg.exe {0} `{1}` /v `{2}` /t {3} /d `{4}` /f" -f $Command, $Path, $Name, $Type, $Data
-
-
- #   $fullCommand = "{0} {1}\{2} /v ""{3}"" /t {4} /d ""{5}"" /f {6}" -f $Command, $Path, $Name, $Type, $Data, $AdditionalArgs
-
     try {
         Write-Host "Running command:" -ForegroundColor Cyan
         Write-Host $fullCommand

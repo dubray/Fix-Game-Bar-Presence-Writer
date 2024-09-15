@@ -14,6 +14,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Set console colors
+$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
 $Host.UI.RawUI.BackgroundColor = "Black"
 $Host.PrivateData.ProgressBackgroundColor = "Black"
 $Host.PrivateData.ProgressForegroundColor = "White"
@@ -26,10 +27,31 @@ function Invoke-RegistryCommand {
         [string]$Path,
         [string]$Name,
         [string]$Type,
-        [string]$Data
+        [string]$Data,
+        [string]$AdditionalArgs = $null  # Optional parameter
     )
+	
+	Write-Host "Command: $Command, Path: $Path, Name: $Name, Type: $Type, Data: $Data"
+	
+	# Ensure no null values for parameters
+    if (-not $Command -or -not $Path -or -not $Name -or -not $Type) {
+        Write-Host "Error: Missing one or more required parameters." -ForegroundColor Red
+        return
+    }
 
-    $fullCommand = "Reg.exe {0} `{1}` /v `{2}` /t {3} /d `{4}` /f" -f $Command, $Path, $Name, $Type, $Data
+
+	# Construct the command based on whether AdditionalArgs was provided
+    # Construct the command based on whether AdditionalArgs was provided
+    if ($PSBoundParameters.ContainsKey('AdditionalArgs') -and $AdditionalArgs) {
+        $fullCommand = "{0} `{1}` /v `{2}` /t {3} /d `{4}` {5} /f" -f $Command, $Path, $Name, $Type, $Data, $AdditionalArgs
+    } else {
+        $fullCommand = "{0} `{1}` /v `{2}` /t {3} /d `{4}` /f" -f $Command, $Path, $Name, $Type, $Data
+    }
+	
+	#$fullCommand = "Reg.exe {0} `{1}` /v `{2}` /t {3} /d `{4}` /f" -f $Command, $Path, $Name, $Type, $Data
+
+
+ #   $fullCommand = "{0} {1}\{2} /v ""{3}"" /t {4} /d ""{5}"" /f {6}" -f $Command, $Path, $Name, $Type, $Data, $AdditionalArgs
 
     try {
         Write-Host "Running command:" -ForegroundColor Cyan
@@ -43,10 +65,17 @@ function Invoke-RegistryCommand {
 
 # Function to take ownership and rename file
 function TakeOwnershipAndRename {
-    Write-Host "Taking ownership of the file and renaming..." -ForegroundColor Cyan
-    $filePath = "C:\Windows\System32\GameBarPresenceWriter.exe"
+	$filePath = "C:\Windows\System32\GameBarPresenceWriter.exe"
     $newFileName = "C:\Windows\System32\GameBarPresenceWriter.exe.old"
 
+	# Check if the file exists
+    if (-not (Test-Path $filePath)) {
+        Write-Host "Error: File $filePath does not exist." -ForegroundColor Red
+        return
+    }
+	
+    Write-Host "Taking ownership of the file and renaming..." -ForegroundColor Cyan
+    
     # Take ownership
     Start-Process -FilePath "cmd.exe" -ArgumentList "/c takeown /f $filePath" -Wait -NoNewWindow
 
@@ -86,25 +115,25 @@ function DisableFSOAndGameBarSupport {
     Write-Host "Disabling FSO and Game Bar Support..." -ForegroundColor Cyan
 
     $commands = @(
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DSEBehavior"; Type = "REG_DWORD"; Data = "2" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DXGIHonorFSEWindowsCompatible"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_EFSEFeatureFlags"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehavior"; Type = "REG_DWORD"; Data = "2" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehaviorMode"; Type = "REG_DWORD"; Data = "2" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_HonorUserFSEBehaviorMode"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Add"; Path = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; Name = "__COMPAT_LAYER"; Type = "REG_SZ"; Data = "~DISABLEDXMAXIMIZEDWINDOWEDMODE" },
-        @{ Command = "Add"; Path = "HKCU\System\GameBar"; Name = "GamePanelStartupTipIndex"; Type = "REG_DWORD"; Data = "3" },
-        @{ Command = "Add"; Path = "HKCU\System\GameBar"; Name = "ShowStartupPanel"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKCU\System\GameBar"; Name = "UseNexusForGameBarEnabled"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter"; Name = "ActivationType"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR"; Name = "AllowGameDVR"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Microsoft\PolicyManager\default\ApplicationManagement\AllowGameDVR"; Name = "value"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_Enabled"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"; Name = "AppCaptureEnabled"; Type = "REG_DWORD"; Data = "0" }
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DSEBehavior"; Type = "REG_DWORD"; Data = "2"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DXGIHonorFSEWindowsCompatible"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_EFSEFeatureFlags"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehavior"; Type = "REG_DWORD"; Data = "2"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehaviorMode"; Type = "REG_DWORD"; Data = "2"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_HonorUserFSEBehaviorMode"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; Name = "__COMPAT_LAYER"; Type = "REG_SZ"; Data = "~ DISABLEDXMAXIMIZEDWINDOWEDMODE"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "GamePanelStartupTipIndex"; Type = "REG_DWORD"; Data = "3"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "ShowStartupPanel"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "UseNexusForGameBarEnabled"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter"; Name = "ActivationType"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR"; Name = "AllowGameDVR"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Microsoft\PolicyManager\default\ApplicationManagement\AllowGameDVR"; Name = "value"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_Enabled"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"; Name = "AppCaptureEnabled"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" }
     )
 
     foreach ($cmd in $commands) {
-        Invoke-RegistryCommand -Command $cmd.Command -Path $cmd.Path -Name $cmd.Name -Type $cmd.Type -Data $cmd.Data
+        Invoke-RegistryCommand @cmd
     }
 
     Write-Output "FSO and Game Bar Support disabled."
@@ -115,67 +144,61 @@ function EnableFSOAndGameBarSupport {
     Write-Host "Enabling FSO and Game Bar Support..." -ForegroundColor Cyan
 
     $commands = @(
-        @{ Command = "Delete"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DSEBehavior"; Type = "REG_DWORD"; Data = "" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DXGIHonorFSEWindowsCompatible"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_EFSEFeatureFlags"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Delete"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehavior"; Type = "REG_DWORD"; Data = "" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehaviorMode"; Type = "REG_DWORD"; Data = "2" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_HonorUserFSEBehaviorMode"; Type = "REG_DWORD"; Data = "0" },
-        @{ Command = "Delete"; Path = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; Name = "__COMPAT_LAYER"; Type = "REG_SZ"; Data = "" },
-        @{ Command = "Delete"; Path = "HKCU\System\GameBar"; Name = "GamePanelStartupTipIndex"; Type = "REG_DWORD"; Data = "" },
-        @{ Command = "Delete"; Path = "HKCU\System\GameBar"; Name = "ShowStartupPanel"; Type = "REG_DWORD"; Data = "" },
-        @{ Command = "Delete"; Path = "HKCU\System\GameBar"; Name = "UseNexusForGameBarEnabled"; Type = "REG_DWORD"; Data = "" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter"; Name = "ActivationType"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR"; Name = "AllowGameDVR"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Add"; Path = "HKLM\SOFTWARE\Microsoft\PolicyManager\default\ApplicationManagement\AllowGameDVR"; Name = "value"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Add"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_Enabled"; Type = "REG_DWORD"; Data = "1" },
-        @{ Command = "Delete"; Path = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"; Name = "AppCaptureEnabled"; Type = "REG_DWORD"; Data = "" }
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DSEBehavior"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_DXGIHonorFSEWindowsCompatible"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_EFSEFeatureFlags"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehavior"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_FSEBehaviorMode"; Type = "REG_DWORD"; Data = "2"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_HonorUserFSEBehaviorMode"; Type = "REG_DWORD"; Data = "0"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; Name = "__COMPAT_LAYER"; Type = "REG_SZ"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "GamePanelStartupTipIndex"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "ShowStartupPanel"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameBar"; Name = "UseNexusForGameBarEnabled"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter"; Name = "ActivationType"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR"; Name = "AllowGameDVR"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKLM\SOFTWARE\Microsoft\PolicyManager\default\ApplicationManagement\AllowGameDVR"; Name = "value"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\System\GameConfigStore"; Name = "GameDVR_Enabled"; Type = "REG_DWORD"; Data = "1"; AdditionalArgs = "/f" },
+        @{ Command = "Reg.exe"; Path = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"; Name = "AppCaptureEnabled"; Type = "REG_DWORD"; Data = ""; AdditionalArgs = "/v /f" }
     )
 
     foreach ($cmd in $commands) {
-        Invoke-RegistryCommand -Command $cmd.Command -Path $cmd.Path -Name $cmd.Name -Type $cmd.Type -Data $cmd.Data
+        Invoke-RegistryCommand @cmd
     }
 
     Write-Output "FSO and Game Bar Support enabled."
 }
 
 # Main script logic
-Write-Host "Choose an option:" -ForegroundColor Yellow
-Write-Host "1. Disable the GameBarPresenceWriter file." -ForegroundColor Yellow
-Write-Host "2. Revert the changes." -ForegroundColor Yellow
-Write-Host "3. Goto next." -ForegroundColor Yellow
-$choice = Read-Host "Enter your choice (1/2/3)"
+Write-Host "Do you want to modify the GameBarPresenceWriter file to solve the frame throttling problem?" -ForegroundColor Yellow
+Write-Host "Enter 'y' to modify the main file, 'n' to do nothing, or 'r' to revert the changes." -ForegroundColor Yellow
+$choice = Read-Host "Enter your choice (y/n/r)"
 
-switch ($choice) {
-    "1" {
+switch ($choice.ToLower()) {
+    "y" {
         TakeOwnershipAndRename
     }
-    "2" {
-        RevertChanges
-    }
-    "3" {
+    "n" {
         Write-Host "No modifications made."
-        
+    }
+    "r" {
+        RevertChanges
     }
     default {
         Write-Host "Invalid choice. No action taken."
     }
 }
 
-Write-Host "Choose an option for FSO and Game Bar support:" -ForegroundColor Yellow
-Write-Host "1. Disable FSO and Game Bar support." -ForegroundColor Yellow
-Write-Host "2. Enable FSO and Game Bar support." -ForegroundColor Yellow
-Write-Host "3. Revert to previous settings." -ForegroundColor Yellow
-$choice = Read-Host "Enter your choice (1/2/3)"
+Write-Host "Do you want to disable (d) or enable (e) FSO and Game Bar support, or revert (r) to previous settings?" -ForegroundColor Yellow
+$choice = Read-Host "Enter your choice (d/e/r)"
 
-switch ($choice) {
-    "1" {
+switch ($choice.ToLower()) {
+    "d" {
         DisableFSOAndGameBarSupport
     }
-    "2" {
+    "e" {
         EnableFSOAndGameBarSupport
     }
-    "3" {
+    "r" {
         Write-Host "No changes made."
     }
     default {
